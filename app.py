@@ -7,7 +7,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.document_loaders.csv_loader import CSVLoader
-from langchain.vectorstores import FAISS
+from langchain.vectorstores import Chroma
 
 # Set your OpenAI API key
 openai.api_key = 'YOUR_OPENAI_API_KEY'
@@ -41,18 +41,18 @@ def store_doc_embeds(file, filename):
     loader = CSVLoader(file_path=tmp_file_path, encoding="utf-8")
     data = loader.load()
     embeddings = OpenAIEmbeddings()
-    vectors = FAISS.from_documents(data, embeddings)
+    vectors = Chroma.from_documents(data, embeddings)
     os.remove(tmp_file_path)
 
     # Save the vectors to a temporary file instead of pickling to avoid thread issues
-    vectors.save_local(filename + "_index")
+    vectors.persist()
 
 def get_doc_embeds(file, filename):
     if not os.path.isfile(filename):
         store_doc_embeds(file, filename)
 
     # Load the vectors from the saved file
-    vectors = FAISS.load_local(filename + '_index', OpenAIEmbeddings(), allow_dangerous_deserialization=True)
+    vectors = Chroma(persist_directory=filename + '_index', embedding_function=OpenAIEmbeddings())
     return vectors
 
 def conversational_chat(query, chain):
@@ -83,7 +83,7 @@ def main():
                     file = uploaded_file.read()
                     vectors = get_doc_embeds(file, uploaded_file.name.replace(' ', '_').replace('(', '').replace(')', ''))
                     chain = ConversationalRetrievalChain.from_llm(
-                        llm=ChatOpenAI(temperature=0.0, model_name='gpt-4', streaming=True),
+                        llm=ChatOpenAI(temperature=0.0, model_name='gpt-3.5-turbo', streaming=True),
                         retriever=vectors.as_retriever(), chain_type="stuff"
                     )
                 st.session_state['ready'] = True
@@ -110,12 +110,14 @@ def main():
         else:
             st.sidebar.info(
                 "👆 Upload your CSV file to get started, "
+                "sample for try : [fishfry-locations.csv](https://drive.google.com/file/d/1ByZwje8U7sPEUer_YkEtumUX4WHOaDpl/view?usp=sharing)"
             )
 
     about = st.sidebar.expander("About 🤖")
     about.write("#### ChatBot-CSV is an AI chatbot featuring conversational memory, designed to enable users to discuss their CSV data in a more intuitive manner. 📄")
     about.write("#### It employs large language models to provide users with seamless, context-aware natural language interactions for a better understanding of their CSV data. 🌐")
     about.write("#### Powered by [Langchain](https://github.com/hwchase17/langchain), [OpenAI](https://platform.openai.com/docs/models/gpt-3-5) and [Streamlit](https://github.com/streamlit/streamlit) ⚡")
+    about.write("#### Source code : [Architectshwet/Chat-on-csv-data](https://github.com/Architectshwet/Chat-on-csv-data)")
 
 if __name__ == "__main__":
     main()
